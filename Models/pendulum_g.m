@@ -1,10 +1,12 @@
-function xdot = pendulum(x, u, params)
+function g_x = pendulum_g(x, params)
 %PENDULUM Computes the continuous time dynamics of the pendulum
 %   Inputs:
 %   x:      state, (theta, thetadot). theta=0 corrosponds to upright
-%   u:      input, (torque). positive torque is CCW
 %   params: struct, mass (m), length (L), gravity (g)
 % Outputs:
-%   xdot: (thetadot, thetaddot).
-xdot = pendulum_f(x, params) + pendulum_g(x, params) * u;
+%   g_x:    actuation matrix, g(x)
+g_x = [
+    0; 
+    1 / (params.m * params.L^2)
+];
 end

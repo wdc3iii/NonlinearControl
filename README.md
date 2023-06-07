@@ -16,6 +16,7 @@ The simulators folder contains wrapper functions which simulate systems from the
 * Input Delays (TODO)
 * Sensor Noise (TODO)
 * Disturbances (TODO)
+
 These simulators aim to help evaluate the robustness of the given controllers to the uncertainties present in real-world implementation. Controllers which leverage nonlinear dynamics are inherently model-based, and as such care must be taken to ensure robustness to uncertainty and noise.
 
 ## Nominal Control

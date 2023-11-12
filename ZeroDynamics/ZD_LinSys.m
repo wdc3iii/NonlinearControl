@@ -113,3 +113,45 @@ for r = -5:2:5
 end
 
 eig(A - B * ([1 0]*C*A*A + Kp*[1 0]*C + Kd*[1 0]*C*A))
+
+%% Now consider a 3D System, ZD depend on y2
+A = [0 1 0; 0 0 0; 0 1 1]; B = [0; 1; 0];
+eig(A)
+Q = eye(3);
+R = 1;
+
+[K, S, P] = lqr(A, B, Q, R);
+S11 = S(1:2, 1:2);
+S12 = S(1:2, 3);
+
+figure()
+hold on
+z = linspace(-5, 5);
+y = - S11 \ S12 * z;
+plot3(z', y(1, :), y(2, :), 'k')
+xlabel('z')
+ylabel('y1')
+zlabel('y2')
+
+z0 = 3;
+y0 = - S11 \ S12 * z0;
+[~, x] = ode45(@(t, x) A * x + B * (-K * x), [0, 10], [y0; z0]);
+plot3(x(:, 3), x(:, 1), x(:, 2), 'r')
+
+C = [eye(2) S11 \ S12];
+Kp = 5; Kd = 4;
+[~, x] = ode45(@(t, x) A * x + B * (-[1 0]*C*A*A*x - Kp*[1 0]*C*x - Kd*[1 0]*C*A*x), [0, 10], [y0; z0]);
+plot3(x(:, 3), x(:, 1), x(:, 2), 'b')
+
+%% Plot a bunch
+for r = -5:2:5
+    for c = -5:2:5
+        for d = -5:2:5
+            IC2 = [r; c; d];
+            [~, x] = ode45(@(t, x) A * x + B * (-[1 0]*C*A*A*x - Kp*[1 0]*C*x - Kd*[1 0]*C*A*x), [0, 10], IC2);
+            plot3(x(:, 3), x(:, 1), x(:, 2), 'b')
+        end
+    end
+end
+
+eig(A - B * ([1 0]*C*A*A + Kp*[1 0]*C + Kd*[1 0]*C*A))

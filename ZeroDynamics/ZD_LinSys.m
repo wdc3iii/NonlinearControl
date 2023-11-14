@@ -167,11 +167,13 @@ hold on
 A = [0 1 0; 0 0 0; 1 1 1]; B = [0; 1; 0];
 
 % now stabilize the subspace y = -Kp * z
-% Kp = 5; % Nice stability
-Kp = 0.1; % Unstable
+Kp = 5; % Nice stability
+% Kp = 0.1; % Unstable
 % Kp = 1.1; % Stable (surface barely stable)
 % Kp = 0.9; % Unstable (surface barely unstable)
 C = [1 0 Kp];
+
+disp((1 - A(3, 2) / (1 + Kp * A(3,2)) * Kp) * (A(3,3) - A(3,1) * Kp))
 
 [x, y] = meshgrid(-5:5, -5:5);
 z = -x / Kp;
@@ -212,4 +214,108 @@ subplot(2,1,2)
 xlabel('t')
 ylabel('error dot from subspace y = -Kp z')
 
+%% Root Locusish ideas
+A = [0 1 0; 0 0 0; 1 10 1]; B = [0; 1; 0];
+figure()
+K = linspace(0, 10);
+plot(K, (1 - A(3, 2) ./ (1 + K .* A(3,2)) .* K) .* (A(3,3) - A(3,1) .* K))
+xlabel('K')
+ylabel('a s.t. dotz = a z')
+grid on
 
+
+%% Compton System
+k = 1; b = 0.2; m = 1;
+% Nominal Dynamics with x = [x1 x2 x1dot x2dot]
+Anom = [0 0 1 0;
+     0 0 0 1;
+     -k/m k/m -b/m b/m;
+     k/m -k/m b/m -b/m];
+Bnom = [0; 0; 1; 0];
+
+% Choose the output collocated with actuator: y = x1, dy = x1dot, z1 = x2,
+% z2 = x2dot
+DPhi = [1 0 0 0; 0 0 1 0; 0 1 0 0; 0 0 0 1];
+A = DPhi * Anom / DPhi;
+B = DPhi * Bnom;
+
+% Feedback linearize output with u = - A(2, :)x + v
+Ap = A - B * A(2, :);
+
+% Segment matrices
+Ay = Ap(3:4, 1);
+Adoty = Ap(3:4, 2);
+Az = Ap(3:4, 3:4);
+
+% Design yd to stabilize the z dynamics
+Q = eye(2);
+R = 1;
+[Kz, S, p] = lqr(Az, Ay, Q, R);
+G = 10;
+Kz = [G 2*sqrt(G)];
+
+% Check if this stabilizes the whole system state
+Az_feedback = ((1 - Adoty / (1 + Kz * Adoty) * Kz) * (Az - Ay * Kz));
+eig(Az_feedback)
+
+% Now stabilize the surface yd = -K * z
+C = [1 0 Kz];
+Kp = 5;
+Kd = 4;
+k_x = @(x) 1 / (C * A * B) * (- C * A * A - Kp * C - Kd * C * A) * x; 
+
+% And of course try it
+fh1 = figure(4); clf
+fh2 = figure(5); clf
+fh3 = figure(6); clf
+z1 = 1;
+z2 = 2;
+for y1 = -5:5
+    for y2 = -5:5
+        Phi0 = [y1; y2; z1; z2];
+        [t, x] = ode45(@(t, x) A * x + B * (-A(2, :) * x + k_x(x)), [0, 10], Phi0);
+
+        figure(fh1)
+        subplot(1,2,1)
+        hold on
+        plot(x(:, 1), x(:, 2), 'b')
+        subplot(1, 2, 2)
+        hold on
+        plot(x(:, 3), x(:, 4), 'b')
+
+        figure(fh2)
+        subplot(2,1,1)
+        hold on
+        plot(t, C * x')
+        subplot(2,1,2)
+        hold on
+        plot(t, C * A * x')
+
+        figure(fh3)
+        for i = 1:4
+            subplot(4,1,i)
+            hold on
+            plot(t, x(:, i))
+        end
+    end
+end
+
+figure(fh1)
+subplot(1,2,1)
+xlabel('y')
+ylabel('dy')
+hold off
+subplot(1,2,2)
+xlabel('z1')
+ylabel('z2')
+hold off
+
+figure(fh2)
+subplot(2, 1, 1)
+xlabel('t')
+ylabel('e')
+hold off
+subplot(2, 1, 2)
+xlabel('t')
+ylabel('de')
+hold off

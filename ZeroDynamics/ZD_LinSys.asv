@@ -157,27 +157,20 @@ end
 
 eig(A - B * ([1 0]*C*A*A + Kp*[1 0]*C + Kd*[1 0]*C*A))
 
-%% Stabilize a subspace y = -Kp * z
-close all
+%% Another idea
 figure(1)
-xlabel('z')
-ylabel('y')
-zlabel('doty')
 hold on
 A = [0 1 0; 0 0 0; 1 1 1]; B = [0; 1; 0];
 
 % now stabilize the subspace y = -Kp * z
-% Kp = 5; % Nice stability
-Kp = 0.1; % Unstable
-% Kp = 1.1; % Stable (surface barely stable)
-% Kp = 0.9; % Unstable (surface barely unstable)
+Kp = 5;
 C = [1 0 Kp];
+R = 1;
+[K, S, P] = lqr(A, B, C' * C, R);
 
 [x, y] = meshgrid(-5:5, -5:5);
-z = -x / Kp;
-surf(z, x, y,'edgecolor','none')
-shading interp
-alpha(0.2)
+z = -y / Kp;
+surf(z, x, y)
 hold off;
 Kp1 = 10; 
 Kd1 = 6;
@@ -199,17 +192,9 @@ for r = -5:2:5
             hold off
             subplot(2,1,2)
             hold on
-            plot(t, (Kp * Az + [0 1 0]) * x')
+            plot((Kp * Az + [0 1 0] * )
 
         end
     end
 end
-subplot(2,1,1)
-xlabel('t')
-ylabel('error from subspace y = -Kp z')
-
-subplot(2,1,2)
-xlabel('t')
-ylabel('error dot from subspace y = -Kp z')
-
 

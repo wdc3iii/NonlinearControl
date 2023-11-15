@@ -22,8 +22,8 @@ DI = jacobian(I, [q; dq]);
 disp(DI)
 
 %% Zero Dynamics Feedback
-% yd = @(a1, a2) a1 + a2;
-syms yd(a1, a2)
+yd = @(a1, a2) -10 * a1 + 5 * a2;
+% syms yd(a1, a2)
 yf = y - yd(z1, z2);
 dyf = simplify(dy - subs(jacobian(yd(a1, a2), [a1; a2]), {a1, a2}, {z1, z2}) * jacobian([z1; z2], [q; dq]) * [dq; D \ (B * u -H)]);
 

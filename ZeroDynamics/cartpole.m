@@ -1,12 +1,13 @@
 %% Simulation
 clear; clc; close all;
 %%% Parameters
+
+
+%%% Cartpole
 l = 1;
 g = -9.81;
 mc = 1;
 mp = 1;
-
-%%% Double Pendulum Actuated in Middle (Acrobot)
 syms x th dx dth real
 q = [x; th];
 dq = [dx; dth];
@@ -26,6 +27,34 @@ LgLfy = jacobian(dy,vars)*g;
 z1 = N*q;
 z2 = N*D*dq;
 
+%%% Acrobot
+% l=1;
+% g=9.81;
+% m1=1;
+% m2=1;
+% lc = l/2;
+% I1 = 1;
+% I2 = 1;
+% syms t1 t2 td1 td2 real
+% vars = [t1 t2 td1 td2]';
+% D = [I1+I2+m2*l^2+2*m2*l*lc*cos(t2) I2+m2*l*lc*cos(t2); I2+m2*l*lc*cos(t2) I2];
+% C = [-2*m2*l*lc*sin(t2)*td2 -m2*l*lc*sin(t2)*td2; m2*l*lc*sin(t2)*td1 0];
+% G = -[m1*g*lc*sin(t1)+m2*g*(l*sin(t1)+lc*sin(t1+t2)); m2*g*lc*sin(t1+t2)];
+% H = C*[td1; td2] + G;
+% B = [0;1];
+% 
+% f = [vars(3:4); -inv(D)*H];
+% g = [0;0; D \ B];
+% 
+% N = [1 0];
+% y = B'*[t1; t2];
+% dy = jacobian(y,vars)*f;
+% Lf2y = jacobian(dy,vars)*f;
+% LgLfy = jacobian(dy,vars)*g;
+% z1 = N*[t1; t2];
+% z2 = N*D*[td1; td2];
+
+%%% Dynamics
 dynamics.f = matlabFunction(f,'vars',{vars});
 dynamics.g = matlabFunction(g,'vars',{vars});
 dynamics.y = matlabFunction(y,'vars',{vars});
@@ -46,12 +75,18 @@ omega_x = [zeros(2) eye(2)]*dPhi*f;
 assert(all(eval(simplify([zeros(2) eye(2)]*dPhi*g)) == [0; 0])); % zero dynamics had better not have control input. 
 
 dynamics.Phi = matlabFunction(Phi,'vars',{vars});
-
+dynamics.dPhi = matlabFunction(dPhi,'vars',{vars});
 
 syms n1_ n2_ z1_ z2_
 z_vars = [n1_ n2_ z1_ z2_];
 
+% Cartpole
 Phi_inv = [n1_; z1_; n2_; z2_ - n2_ * cos(z1_)]; % gives x from [n; z]
+
+% Acrobot
+% Phi_inv = [z1_; n1_; (z2_-(n2_*(cos(n1_)/2 + 1)))/(cos(n1_) + 3); n2_]; % gives x from [n; z]
+
+
 dynamics.Phi_inv = matlabFunction(Phi_inv,'vars',{z_vars});
 
 assert(all(all(eval(jacobian(subs(Phi,vars,Phi_inv),z_vars)) == eye(4)))); % phi inverse is correct
@@ -71,13 +106,14 @@ dynamics.Lg_zd = matlabFunction(Lg_zd ,'vars',{z_vars});
 
 %% Simulate
 dynamics.K_ll = [10 2*sqrt(10)];
-dynamics.K_z = [10 -5];
+dynamics.K_z = [10 5];
 
 tspan = [0, 20];
 
-x0 = [1 1.5 1 0.4];
+% x0 = [1 1.5 1 0.4];
 % x0 = [-7.5000   -0.5000    6.5587   -5.2558];
-
+x0 = [-0.200000000000000,0.320000000000000,2.253969504083596,-2.739547684553864];
+% x0 = [-0.1, -0.1, 0, 0];
 options = odeset('Events',@(t, x)explosionEvent(t, x));
 [t,x] = ode45(@(t,x) CartpoleODE(t,x,dynamics), tspan, x0, options);
 
@@ -193,16 +229,17 @@ end
 
 %% Visualizing Zero Dynamics
 
-dynamics.K_z = [10 10];
+% dynamics.K_z = [10 5];
 
+% figure(5)
+% clf
 figure(6)
 clf
-hold on
 N = 21;
 zbar = zeros(2, N^2);
 zdotbar = zeros(2, N^2);
-z1s = linspace(-0.05, 0.05, N);
-z2s = linspace(-0.05, 0.05, N);
+z1s = linspace(-0.4, 0.4, N);
+z2s = linspace(-1, 1, N);
 max_e = 0;
 for z1_ind = 1:N
     for z2_ind = 1:N
@@ -210,36 +247,85 @@ for z1_ind = 1:N
         % zdot = omega(y_d(z), dyd_dz * zdot, z)
         % Solve for zdot: 0 = zdot - omega(y_d(z), dyd_dz * zdot, z)
         zb = [z1s(z1_ind); z2s(z2_ind)];
+        % zb = z_fail;
         f = @(zdot) zdot - dynamics.zd([-dynamics.K_z * zb; -dynamics.K_z * zdot; zb]')';
         [zdot1, fv1, flag1] = fsolve(f, -zb);
         [zdot2, fv2, flag2] = fsolve(f, [0; 0]);
         [zdot3, fv3, flag3] = fsolve(f, -[0 1; -1 0] * zb);
         [zdot4, fv4, flag4] = fsolve(f, -[0 -1; 1 0] * zb);
         zbar(:, z1_ind + (z2_ind - 1) * N) = zb;
-        zdotbar(:, z1_ind + (z2_ind - 1) * N) = zdot;
-
+        
         if any([flag1, flag2, flag3, flag4] == 1)
-            disp('yes')
+            if ~all([flag1, flag2, flag3, flag4] == 1)
+                disp('here')
+            end
+            if flag1 == 1
+                zdotbar(:, z1_ind + (z2_ind - 1) * N) = zdot1;
+                zdot = zdot1;
+                fv = fv1;
+            elseif flag2 == 1
+                zdotbar(:, z1_ind + (z2_ind - 1) * N) = zdot2;
+                zdot = zdot2;
+                fv = fv2;
+            elseif flag3 == 1
+                zdotbar(:, z1_ind + (z2_ind - 1) * N) = zdot3;
+                zdot = zdot3;
+                fv = fv3;
+            else
+                zdotbar(:, z1_ind + (z2_ind - 1) * N) = zdot4;
+                zdot = zdot4;
+                fv = fv4;
+            end
+            x0 = dynamics.Phi_inv([-dynamics.K_z * zb; -dynamics.K_z * zdot; zb]')';
+            [t,x] = ode45(@(t,x) CartpoleODE(t,x,dynamics), tspan, x0, options);
+
+            e = dynamics.y(x')' + (dynamics.K_z * [dynamics.z1(x'); dynamics.z2(x')])';
+            de = dynamics.dy(x')' + (dynamics.K_z * dynamics.zd(dynamics.Phi(x')')')';
+            max_e = max(max_e, max(abs(e)));
+            nz = dynamics.Phi(x')';
+
+            figure(6); hold on;
+            plot3(nz(:, 3), nz(:, 4), e, 'b')
+            % figure(5); hold on;
+            % plot(fv(1), fv(2), 'o')
         end
-
-
-        % x0 = dynamics.Phi_inv([-dynamics.K_z * zb; -dynamics.K_z * zdot; zb]')';
-        % [t,x] = ode45(@(t,x) CartpoleODE(t,x,dynamics), tspan, x0, options);
-        % 
-        % e = dynamics.y(x')' + (dynamics.K_z * [dynamics.z1(x'); dynamics.z2(x')])';
-        % de = dynamics.dy(x')' + (dynamics.K_z * dynamics.zd(dynamics.Phi(x')')')';
-        % max_e = max(max_e, max(abs(e)));
-        % nz = dynamics.Phi(x')';
-        % plot3(nz(:, 3), nz(:, 4), e, 'b')
     end
 end
-
+figure(6); hold on
 quiver(zbar(1, :), zbar(2, :), zdotbar(1, :), zdotbar(2, :), 'k')
 xlabel('$z_1$', 'Interpreter', 'latex')
 ylabel('$z_2$', 'Interpreter', 'latex')
 hold off
 
 fprintf('\nMaximum error from ZD surface: %e\n', max_e)
+
+%% Examine loss of relative degree
+dynamics.K_z = [3 0.8];
+Phi_bar = Phi - [-dynamics.K_z * [z1; z2]; -dynamics.K_z * dynamics.zd(dynamics.Phi(vars)')'; 0; 0];
+dPhi_bar = jacobian(Phi_bar, vars);
+charPoly = simplify(det(dPhi_bar));
+charPoly_f = matlabFunction(charPoly,'vars',{vars}');
+
+figure(7)
+fimplicit3(@(x,y,z) charPoly_f([0; x; y; z]), [-2*pi, 2*pi])
+xlabel('theta')
+ylabel('dx')
+zlabel('dth')
+
+%% Zero dynamics surface
+Phi_bar = Phi - [-dynamics.K_z * [z1; z2]; -dynamics.K_z * dynamics.zd(dynamics.Phi(vars)')'; 0; 0];
+subs(Phi_bar,'x',0)
+functino = matlabFunction(Phi_bar(1),'vars',{vars}');
+figure(7)
+fimplicit3(@(x,y,z) functino([x; y; 0; z]), [-2*pi, 2*pi])
+xlabel('theta')
+ylabel('dx')
+zlabel('dth')
+
+%% More
+x0 = [0; 0.4; 1; fzero(@(dth_) charPoly_f([0; 0.4; 1; dth_]), 0)];
+
+z_fail = [zeros(2) eye(2)] * dynamics.Phi(x0);
 
 
 %% Controller
@@ -263,10 +349,10 @@ Lg_zd = d.Lg_zd(n_z');
 u = (d.LgLfy(x) + K_z*Lg_zd) \ (-(d.Lf2y(x)+K_z*Lf_zd) - K_ll*[n(1) + K_z*z; n(2) + K_z*z_dot]);
 
 % hack for plotting
-u = max(min(u, 50), -50);
-if abs(u) == 50
-    % disp('..........Clipping..........')
-end
+% u = max(min(u, 50), -50);
+% if abs(u) == 50
+%     % disp('..........Clipping..........')
+% end
 
 % Apply input to the system
 dx = d.f(x) + d.g(x)*u;

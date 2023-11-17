@@ -1,11 +1,10 @@
 %% Simulation
 clear; clc; close all;
+
 %%% Parameters
-
-
 %%% Cartpole
 l = 1;
-g = -9.81;
+gr = 9.81;
 mc = 1;
 mp = 1;
 syms x th dx dth real
@@ -13,8 +12,9 @@ q = [x; th];
 dq = [dx; dth];
 vars = [q; dq];
 D = [mc+mp mp*l*cos(th); mp*l*cos(th) mp*l^2];
-H = [-mp*l*dth^2*sin(th); mp*l*g*sin(th)];
-B = [1;0];
+Dq = @(in)[mc+mp mp*l*cos(in(2, :)); mp*l*cos(in(2, :)) mp*l^2];
+H = [-mp*l*dth^2*sin(th); -mp*l*gr*sin(th)];
+B = [1; 0];
 
 f = [vars(3:4); -D \H];
 g = [0; 0; D \ B];
@@ -29,7 +29,7 @@ z2 = N*D*dq;
 
 %%% Acrobot
 % l=1;
-% g=9.81;
+% gr=9.81;
 % m1=1;
 % m2=1;
 % lc = l/2;
@@ -38,8 +38,9 @@ z2 = N*D*dq;
 % syms t1 t2 td1 td2 real
 % vars = [t1 t2 td1 td2]';
 % D = [I1+I2+m2*l^2+2*m2*l*lc*cos(t2) I2+m2*l*lc*cos(t2); I2+m2*l*lc*cos(t2) I2];
+% Dq = @(in)[I1+I2+m2*l^2+2*m2*l*lc*cos(in(2,:)) I2+m2*l*lc*cos(in(2,:)); I2+m2*l*lc*cos(in(2,:)) I2];
 % C = [-2*m2*l*lc*sin(t2)*td2 -m2*l*lc*sin(t2)*td2; m2*l*lc*sin(t2)*td1 0];
-% G = -[m1*g*lc*sin(t1)+m2*g*(l*sin(t1)+lc*sin(t1+t2)); m2*g*lc*sin(t1+t2)];
+% G = -[m1*gr*lc*sin(t1)+m2*gr*(l*sin(t1)+lc*sin(t1+t2)); m2*gr*lc*sin(t1+t2)];
 % H = C*[td1; td2] + G;
 % B = [0;1];
 % 
@@ -81,11 +82,11 @@ syms n1_ n2_ z1_ z2_
 z_vars = [n1_ n2_ z1_ z2_];
 
 % Cartpole
-Phi_inv = [n1_; z1_; n2_; z2_ - n2_ * cos(z1_)]; % gives x from [n; z]
+% Phi_inv = [n1_; z1_; n2_; z2_ - n2_ * cos(z1_)]; % gives x from [n; z]
 
 % Acrobot
 % Phi_inv = [z1_; n1_; (z2_-(n2_*(cos(n1_)/2 + 1)))/(cos(n1_) + 3); n2_]; % gives x from [n; z]
-
+Phi_inv = [B * n1_ + N' * z1_; B * n2_ + N' * ((N * Dq(B * n1_ + N' * z1_) * N') \ (z2_ - B' * Dq(B * n1_ + N' * z1_) * N' * n2_))];
 
 dynamics.Phi_inv = matlabFunction(Phi_inv,'vars',{z_vars});
 
@@ -110,55 +111,56 @@ dynamics.K_z = [10 5];
 
 tspan = [0, 20];
 
+% x0 = [0 acos(-1/dynamics.K_z(1))-1.5 0 0];
 % x0 = [1 1.5 1 0.4];
 % x0 = [-7.5000   -0.5000    6.5587   -5.2558];
-x0 = [-0.200000000000000,0.320000000000000,2.253969504083596,-2.739547684553864];
-% x0 = [-0.1, -0.1, 0, 0];
+% x0 = [-0.200000000000000,0.320000000000000,2.253969504083596,-2.739547684553864];
+x0 = [-0.1, -0.1, 0, 0];
 options = odeset('Events',@(t, x)explosionEvent(t, x));
 [t,x] = ode45(@(t,x) CartpoleODE(t,x,dynamics), tspan, x0, options);
 
 % Plot
-figure(1);
-clf
-subplot(1, 2, 1)
-plot(x(:, 1), x(:, 3))
-xlabel('x')
-ylabel('dx')
-subplot(1, 2, 2)
-plot(x(:, 2), x(:, 4))
-xlabel('th')
-ylabel('dth')
+% figure(1);
+% clf
+% subplot(1, 2, 1)
+% plot(x(:, 1), x(:, 3))
+% xlabel('x')
+% ylabel('dx')
+% subplot(1, 2, 2)
+% plot(x(:, 2), x(:, 4))
+% xlabel('th')
+% ylabel('dth')
+% 
+% sgtitle('Phase Portraits')
+% 
+% figure(2);
+% clf
+% subplot(1, 2, 1)
+% plot(t, x(:, [1 3]))
+% xlabel('t')
+% ylabel('x, dx')
+% legend('x', 'dx')
+% subplot(1, 2, 2)
+% plot(t, x(:, [2 4]))
+% xlabel('t')
+% ylabel('th, dth')
+% legend('th', 'dth')
+% sgtitle('Time Series')
+% 
+% figure(3)
+% clf
+% e = dynamics.y(x')' + (dynamics.K_z * [dynamics.z1(x'); dynamics.z2(x')])';
+% de = dynamics.dy(x')' + (dynamics.K_z * dynamics.zd(dynamics.Phi(x')')')';
+% 
+% plot(t, [e, de])
+% legend('e', 'de')
+% xlabel('t')
+% ylabel('e, de')
 
-sgtitle('Phase Portraits')
-
-figure(2);
-clf
-subplot(1, 2, 1)
-plot(t, x(:, [1 3]))
-xlabel('t')
-ylabel('x, dx')
-legend('x', 'dx')
-subplot(1, 2, 2)
-plot(t, x(:, [2 4]))
-xlabel('t')
-ylabel('th, dth')
-legend('th', 'dth')
-sgtitle('Time Series')
-
-figure(3)
-clf
-e = dynamics.y(x')' + (dynamics.K_z * [dynamics.z1(x'); dynamics.z2(x')])';
-de = dynamics.dy(x')' + (dynamics.K_z * dynamics.zd(dynamics.Phi(x')')')';
-
-plot(t, [e, de])
-legend('e', 'de')
-xlabel('t')
-ylabel('e, de')
-
-%% Animation
+%%% Animation
 figure(4)
 clf
-pause
+
 set(gcf,'renderer','painters')
 t_fine = linspace(t(1),t(end),1000);
 x_fine = interp1(t,x,t_fine,'spline');
@@ -208,6 +210,7 @@ buff = 5;
 set(gca,'FontSize',17)
 set(gca,'linewidth',2)
 
+pause
 tic
 cont = true;
 ind = 1;
@@ -229,12 +232,9 @@ end
 
 %% Visualizing Zero Dynamics
 
-% dynamics.K_z = [10 5];
-
-% figure(5)
-% clf
-figure(6)
+figure(5)
 clf
+hold on
 N = 21;
 zbar = zeros(2, N^2);
 zdotbar = zeros(2, N^2);
@@ -284,48 +284,46 @@ for z1_ind = 1:N
             max_e = max(max_e, max(abs(e)));
             nz = dynamics.Phi(x')';
 
-            figure(6); hold on;
             plot3(nz(:, 3), nz(:, 4), e, 'b')
-            % figure(5); hold on;
-            % plot(fv(1), fv(2), 'o')
         end
     end
 end
-figure(6); hold on
 quiver(zbar(1, :), zbar(2, :), zdotbar(1, :), zdotbar(2, :), 'k')
 xlabel('$z_1$', 'Interpreter', 'latex')
 ylabel('$z_2$', 'Interpreter', 'latex')
+set(gca,'FontSize',17)
+
 hold off
 
 fprintf('\nMaximum error from ZD surface: %e\n', max_e)
 
 %% Examine loss of relative degree
-dynamics.K_z = [3 0.8];
-Phi_bar = Phi - [-dynamics.K_z * [z1; z2]; -dynamics.K_z * dynamics.zd(dynamics.Phi(vars)')'; 0; 0];
-dPhi_bar = jacobian(Phi_bar, vars);
-charPoly = simplify(det(dPhi_bar));
-charPoly_f = matlabFunction(charPoly,'vars',{vars}');
-
-figure(7)
-fimplicit3(@(x,y,z) charPoly_f([0; x; y; z]), [-2*pi, 2*pi])
-xlabel('theta')
-ylabel('dx')
-zlabel('dth')
+% dynamics.K_z = [3 0.8];
+% Phi_bar = Phi - [-dynamics.K_z * [z1; z2]; -dynamics.K_z * dynamics.zd(dynamics.Phi(vars)')'; 0; 0];
+% dPhi_bar = jacobian(Phi_bar, vars);
+% charPoly = simplify(det(dPhi_bar));
+% charPoly_f = matlabFunction(charPoly,'vars',{vars}');
+% 
+% figure(7)
+% fimplicit3(@(x,y,z) charPoly_f([0; x; y; z]), [-2*pi, 2*pi])
+% xlabel('theta')
+% ylabel('dx')
+% zlabel('dth')
 
 %% Zero dynamics surface
-Phi_bar = Phi - [-dynamics.K_z * [z1; z2]; -dynamics.K_z * dynamics.zd(dynamics.Phi(vars)')'; 0; 0];
-subs(Phi_bar,'x',0)
-functino = matlabFunction(Phi_bar(1),'vars',{vars}');
-figure(7)
-fimplicit3(@(x,y,z) functino([x; y; 0; z]), [-2*pi, 2*pi])
-xlabel('theta')
-ylabel('dx')
-zlabel('dth')
+% Phi_bar = Phi - [-dynamics.K_z * [z1; z2]; -dynamics.K_z * dynamics.zd(dynamics.Phi(vars)')'; 0; 0];
+% subs(Phi_bar,'x',0)
+% functino = matlabFunction(Phi_bar(1),'vars',{vars}');
+% figure(7)
+% fimplicit3(@(x,y,z) functino([x; y; 0; z]), [-2*pi, 2*pi])
+% xlabel('theta')
+% ylabel('dx')
+% zlabel('dth')
 
 %% More
-x0 = [0; 0.4; 1; fzero(@(dth_) charPoly_f([0; 0.4; 1; dth_]), 0)];
-
-z_fail = [zeros(2) eye(2)] * dynamics.Phi(x0);
+% x0 = [0; 0.4; 1; fzero(@(dth_) charPoly_f([0; 0.4; 1; dth_]), 0)];
+% 
+% z_fail = [zeros(2) eye(2)] * dynamics.Phi(x0);
 
 
 %% Controller

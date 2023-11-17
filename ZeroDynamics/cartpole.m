@@ -43,10 +43,10 @@ z2 = N*D*dq;
 % G = -[m1*gr*lc*sin(t1)+m2*gr*(l*sin(t1)+lc*sin(t1+t2)); m2*gr*lc*sin(t1+t2)];
 % H = C*[td1; td2] + G;
 % B = [0;1];
-% 
+%
 % f = [vars(3:4); -inv(D)*H];
 % g = [0;0; D \ B];
-% 
+%
 % N = [1 0];
 % y = B'*[t1; t2];
 % dy = jacobian(y,vars)*f;
@@ -73,7 +73,7 @@ dPhi = jacobian(Phi, vars);
 f_hat_x = [eye(2) zeros(2)]*dPhi*f;
 g_hat_x = [eye(2) zeros(2)]*dPhi*g;
 omega_x = [zeros(2) eye(2)]*dPhi*f;
-assert(all(eval(simplify([zeros(2) eye(2)]*dPhi*g)) == [0; 0])); % zero dynamics had better not have control input. 
+assert(all(eval(simplify([zeros(2) eye(2)]*dPhi*g)) == [0; 0])); % zero dynamics had better not have control input.
 
 dynamics.Phi = matlabFunction(Phi,'vars',{vars});
 dynamics.dPhi = matlabFunction(dPhi,'vars',{vars});
@@ -97,13 +97,15 @@ f_hat = simplify(subs(f_hat_x, vars,Phi_inv));
 g_hat = simplify(subs(g_hat_x, vars,Phi_inv));
 
 
-Dzd = jacobian(omega,z_vars);
-Lf_zd = Dzd * [f_hat; omega];
-Lg_zd = Dzd * [g_hat; 0; 0];
+Domega = jacobian(omega,z_vars);
+Lf_omega = Domega * [f_hat; omega];
+Lg_omega = Domega * [g_hat; 0; 0];
 
-dynamics.zd = matlabFunction(omega' ,'vars',{z_vars});
-dynamics.Lf_zd = matlabFunction(Lf_zd ,'vars',{z_vars}); 
-dynamics.Lg_zd = matlabFunction(Lg_zd ,'vars',{z_vars}); 
+dynamics.omega = matlabFunction(omega' ,'vars',{z_vars});
+dynamics.Lf_omega = matlabFunction(Lf_omega ,'vars',{z_vars});
+dynamics.Lg_omega = matlabFunction(Lg_omega ,'vars',{z_vars});
+dynamics.K_ll = [10 2*sqrt(10)];
+dynamics.K_z = [10 5];
 
 %% Simulate
 dynamics.K_ll = [10 2*sqrt(10)];
@@ -111,51 +113,10 @@ dynamics.K_z = [10 5];
 
 tspan = [0, 20];
 
-% x0 = [0 acos(-1/dynamics.K_z(1))-1.5 0 0];
-% x0 = [1 1.5 1 0.4];
-% x0 = [-7.5000   -0.5000    6.5587   -5.2558];
 % x0 = [-0.200000000000000,0.320000000000000,2.253969504083596,-2.739547684553864];
 x0 = [-0.1, -0.1, 0, 0];
 options = odeset('Events',@(t, x)explosionEvent(t, x));
 [t,x] = ode45(@(t,x) CartpoleODE(t,x,dynamics), tspan, x0, options);
-
-% Plot
-% figure(1);
-% clf
-% subplot(1, 2, 1)
-% plot(x(:, 1), x(:, 3))
-% xlabel('x')
-% ylabel('dx')
-% subplot(1, 2, 2)
-% plot(x(:, 2), x(:, 4))
-% xlabel('th')
-% ylabel('dth')
-% 
-% sgtitle('Phase Portraits')
-% 
-% figure(2);
-% clf
-% subplot(1, 2, 1)
-% plot(t, x(:, [1 3]))
-% xlabel('t')
-% ylabel('x, dx')
-% legend('x', 'dx')
-% subplot(1, 2, 2)
-% plot(t, x(:, [2 4]))
-% xlabel('t')
-% ylabel('th, dth')
-% legend('th', 'dth')
-% sgtitle('Time Series')
-% 
-% figure(3)
-% clf
-% e = dynamics.y(x')' + (dynamics.K_z * [dynamics.z1(x'); dynamics.z2(x')])';
-% de = dynamics.dy(x')' + (dynamics.K_z * dynamics.zd(dynamics.Phi(x')')')';
-% 
-% plot(t, [e, de])
-% legend('e', 'de')
-% xlabel('t')
-% ylabel('e, de')
 
 %%% Animation
 figure(4)
@@ -185,7 +146,7 @@ set(gca,'linewidth',2)
 
 subplot(2,2,4)
 e_fine = dynamics.y(x_fine')' + (dynamics.K_z * [dynamics.z1(x_fine'); dynamics.z2(x_fine')])';
-de_fine = dynamics.dy(x_fine')' + (dynamics.K_z * dynamics.zd(dynamics.Phi(x_fine')')')';
+de_fine = dynamics.dy(x_fine')' + (dynamics.K_z * dynamics.omega(dynamics.Phi(x_fine')')')';
 
 plot(t_fine, [e_fine de_fine], 'LineWidth', 3)
 xlabel('$t$','interpreter','latex')
@@ -248,13 +209,13 @@ for z1_ind = 1:N
         % Solve for zdot: 0 = zdot - omega(y_d(z), dyd_dz * zdot, z)
         zb = [z1s(z1_ind); z2s(z2_ind)];
         % zb = z_fail;
-        f = @(zdot) zdot - dynamics.zd([-dynamics.K_z * zb; -dynamics.K_z * zdot; zb]')';
+        f = @(zdot) zdot - dynamics.omega([-dynamics.K_z * zb; -dynamics.K_z * zdot; zb]')';
         [zdot1, fv1, flag1] = fsolve(f, -zb);
         [zdot2, fv2, flag2] = fsolve(f, [0; 0]);
         [zdot3, fv3, flag3] = fsolve(f, -[0 1; -1 0] * zb);
         [zdot4, fv4, flag4] = fsolve(f, -[0 -1; 1 0] * zb);
         zbar(:, z1_ind + (z2_ind - 1) * N) = zb;
-        
+
         if any([flag1, flag2, flag3, flag4] == 1)
             if ~all([flag1, flag2, flag3, flag4] == 1)
                 disp('here')
@@ -280,11 +241,17 @@ for z1_ind = 1:N
             [t,x] = ode45(@(t,x) CartpoleODE(t,x,dynamics), tspan, x0, options);
 
             e = dynamics.y(x')' + (dynamics.K_z * [dynamics.z1(x'); dynamics.z2(x')])';
-            de = dynamics.dy(x')' + (dynamics.K_z * dynamics.zd(dynamics.Phi(x')')')';
+            de = dynamics.dy(x')' + (dynamics.K_z * dynamics.omega(dynamics.Phi(x')')')';
             max_e = max(max_e, max(abs(e)));
             nz = dynamics.Phi(x')';
 
             plot3(nz(:, 3), nz(:, 4), e, 'b')
+        else
+            % Check if the output is valid relative degree here
+            syms n2_temp real
+            nz_temp = [-dynamics.K_z * zb; n2_temp; zb];
+            x_temp = dynamics.Phi_inv(nz_temp')';
+            M = dynamics.LgLfy(x_temp') + dynamics.K_z * dynamics.Lg_omega(nz_temp');
         end
     end
 end
@@ -297,13 +264,70 @@ hold off
 
 fprintf('\nMaximum error from ZD surface: %e\n', max_e)
 
+%% Examine implicit zero dynamics, in a limiting sense:
+N = 100;
+z1_list = zeros(N, 1);
+zdot_list = zeros(2, N);
+z1_prev = 0;
+z1_n = 0.2;
+figure(6)
+clf
+hold on
+zbar_final = [0;0];
+zbardot_final = [0;0];
+for z2_n = linspace(-1.5, 1.5, 31)
+    for sgn = -1:2:1
+        z1_prev = 0;
+        z1_n = 0.2;
+        for i = 1:N
+            z1_list(i) = z1_n;
+            zb = [z1_n; z2_n];
+            f = @(zdot) zdot - dynamics.omega([-dynamics.K_z * zb; -dynamics.K_z * zdot; zb]')';
+            [zdot1, fv1, flag1] = fsolve(f, -zb);
+            [zdot2, fv2, flag2] = fsolve(f, [0; 0]);
+            [zdot3, fv3, flag3] = fsolve(f, -[0 1; -1 0] * zb);
+            [zdot4, fv4, flag4] = fsolve(f, -[0 -1; 1 0] * zb);
+
+            tmp = z1_n;
+            if any([flag1, flag2, flag3, flag4] == 1)
+                if flag1 == 1
+                    zdot = zdot1;
+                elseif flag2 == 1
+                    zdot = zdot2;
+                elseif flag3 == 1
+                    zdot = zdot3;
+                else
+                    zdot = zdot4;
+                end
+                zdot_list(:, i) = zdot;
+                plot(zb(1), zb(2), 'go')
+                z1_n = z1_n + sgn * abs(z1_n - z1_prev);
+                zbar_final = zb;
+                zbardot_final = zdot;
+            else
+                plot(zb(1), zb(2), 'ro')
+                z1_n = z1_n - sgn * abs(z1_n - z1_prev) / 2;
+            end
+            z1_prev = tmp;
+        end
+%         zdot_list = zdot_list(zdot_list ~= [0; 0]);
+        x0 = dynamics.Phi_inv([-dynamics.K_z * zbar_final; -dynamics.K_z * zbardot_final; zbar_final]')';
+        [t,x] = ode45(@(t,x) CartpoleODE(t,x,dynamics), [0, 20], x0, options);
+        nz = dynamics.Phi(x')';
+        plot(nz(:, 3), nz(:, 4), 'b')
+        M = dynamics.LgLfy(x0') + dynamics.K_z * dynamics.Lg_omega(dynamics.Phi(x0')');
+        plot3(zbar_final(1), zbar_final(2), M, 'ko')
+        pause(0.01)
+    end
+end
+
 %% Examine loss of relative degree
 % dynamics.K_z = [3 0.8];
-% Phi_bar = Phi - [-dynamics.K_z * [z1; z2]; -dynamics.K_z * dynamics.zd(dynamics.Phi(vars)')'; 0; 0];
+% Phi_bar = Phi - [-dynamics.K_z * [z1; z2]; -dynamics.K_z * dynamics.omega(dynamics.Phi(vars)')'; 0; 0];
 % dPhi_bar = jacobian(Phi_bar, vars);
 % charPoly = simplify(det(dPhi_bar));
 % charPoly_f = matlabFunction(charPoly,'vars',{vars}');
-% 
+%
 % figure(7)
 % fimplicit3(@(x,y,z) charPoly_f([0; x; y; z]), [-2*pi, 2*pi])
 % xlabel('theta')
@@ -311,7 +335,7 @@ fprintf('\nMaximum error from ZD surface: %e\n', max_e)
 % zlabel('dth')
 
 %% Zero dynamics surface
-% Phi_bar = Phi - [-dynamics.K_z * [z1; z2]; -dynamics.K_z * dynamics.zd(dynamics.Phi(vars)')'; 0; 0];
+% Phi_bar = Phi - [-dynamics.K_z * [z1; z2]; -dynamics.K_z * dynamics.omega(dynamics.Phi(vars)')'; 0; 0];
 % subs(Phi_bar,'x',0)
 % functino = matlabFunction(Phi_bar(1),'vars',{vars}');
 % figure(7)
@@ -322,7 +346,7 @@ fprintf('\nMaximum error from ZD surface: %e\n', max_e)
 
 %% More
 % x0 = [0; 0.4; 1; fzero(@(dth_) charPoly_f([0; 0.4; 1; dth_]), 0)];
-% 
+%
 % z_fail = [zeros(2) eye(2)] * dynamics.Phi(x0);
 
 
@@ -339,12 +363,12 @@ n = [eye(2) zeros(2)] * n_z;
 z = [zeros(2) eye(2)] * n_z;
 
 % Compute z dynamics and derivatives
-z_dot = d.zd(n_z')';
-Lf_zd = d.Lf_zd(n_z');
-Lg_zd = d.Lg_zd(n_z');
+z_dot = d.omega(n_z')';
+Lf_omega = d.Lf_omega(n_z');
+Lg_omega = d.Lg_omega(n_z');
 
 % Compute feedback linearizing input
-u = (d.LgLfy(x) + K_z*Lg_zd) \ (-(d.Lf2y(x)+K_z*Lf_zd) - K_ll*[n(1) + K_z*z; n(2) + K_z*z_dot]);
+u = (d.LgLfy(x) + K_z*Lg_omega) \ (-(d.Lf2y(x)+K_z*Lf_omega) - K_ll*[n(1) + K_z*z; n(2) + K_z*z_dot]);
 
 % hack for plotting
 % u = max(min(u, 50), -50);
@@ -357,7 +381,7 @@ dx = d.f(x) + d.g(x)*u;
 end
 
 function [pos, isterminal,direction] = explosionEvent(t, x)
-    pos = norm(x)-100;
-    isterminal = 1;
-    direction = 1;
+pos = norm(x)-100;
+isterminal = 1;
+direction = 1;
 end

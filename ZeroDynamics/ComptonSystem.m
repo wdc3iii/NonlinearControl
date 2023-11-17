@@ -1,4 +1,4 @@
-%% Compton System
+%% Compton System LOL
 clear; clc; close all;
 
 k = 1; b = -2; m = 1;

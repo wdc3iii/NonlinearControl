@@ -1,4 +1,4 @@
-function [t,x] = sampleHoldSim(model, controller, tspan, x0, dt, params, holdLen)
+function [t,x,u] = sampleHoldSim(model, controller, tspan, x0, dt, params, holdLen)
 %SAMPLEHOLDSIM Performs a simulation with controller run 'continuously'
 % Inputs
 %   model:      function, takes state, input, model params
@@ -9,18 +9,21 @@ function [t,x] = sampleHoldSim(model, controller, tspan, x0, dt, params, holdLen
 %   params:     parameters for the model
 %   holdLen:    number of timesteps to evaluate sim during hold
 if nargin <= 6
-    holdLen = 100;
+    holdLen = 10;
 end
 simSteps = ceil((tspan(2) - tspan(1)) / dt);
 t = linspace(tspan(1), tspan(2), simSteps * holdLen + 1);
-x = zeros(size(x0), simSteps * holdLen);
-x(:, 0) = x0;
+x = zeros(length(x0), simSteps * holdLen + 1);
+u0 = controller(x0);
+u = zeros(length(u0), simSteps * holdLen + 1);
+x(:, 1) = x0;
 for ii = 1:simSteps
     t0 = tspan(1) + (ii - 1) * dt;
-    x0 = x(:, (ii-1)*holdLen);
-    u = controller(x0);
-    [~, x_hold] = ode45(@(t, x) model(x, u, params), linspace(t0, t0+dt, holdLen + 1), x0);
-    x(:, (ii-1)*holdLen:ii*holdLen + 1) = x_hold;
+    x0 = x(:, (ii-1)*holdLen + 1);
+    u0 = controller(x0);
+    [~, x_hold] = ode45(@(t, x) model(x, u0, params), linspace(t0, t0+dt, holdLen + 1), x0);
+    x(:, (ii-1)*holdLen+1:ii*holdLen + 1) = x_hold';
+    u(:, (ii-1)*holdLen+1:ii*holdLen + 1) = u0;
 end
 end
 

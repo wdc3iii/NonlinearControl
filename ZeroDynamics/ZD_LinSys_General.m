@@ -13,7 +13,8 @@ load("ComptonSystem.mat")
 
 % LQR
 Q = diag([1 1 2 2]);
-R = 0.1;
+% R = 1;  % Unstable for "ComptonSystem.mat"
+R = 0.1; % Stable for "ComptonSystem.mat"
 
 assert(size(Az, 1) == size(Az, 2))  % Az square (n-m x n-m)
 assert(size(Az, 1) == size(Ay, 1))  % Ay has n-m rows

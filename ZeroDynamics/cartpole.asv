@@ -7,7 +7,7 @@ l = 1;
 gr = 9.81;
 mc = 1;
 mp = 1;
-syms x th dx dth real
+syms x th dx dth u real
 q = [x; th];
 dq = [dx; dth];
 vars = [q; dq];
@@ -30,7 +30,7 @@ N = [0 1];
 % lc = l/2;
 % I1 = 1;
 % I2 = 1;
-% syms t1 t2 td1 td2 real
+% syms t1 t2 td1 td2 u real
 % q = [t1; t2];
 % dq = [td1; td2];
 % vars = [q; dq];
@@ -110,6 +110,12 @@ options = odeset('Events',@(t, x)explosionEvent(t, x));
 LghatLfhate = simplify(subs(LgLfy, vars, Phi_inv) + dynamics.K_z*Lg_omega);
 LgLfe = simplify(LgLfy + dynamics.K_z*subs(Lg_omega, z_vars, Phi));
 
+% For MPC
+df_dx = jacobian(f, vars);
+dg_dxu = jacobian(g * u, vars);
+dynamics.df_dx = matlabFunction(df_dx,'vars',{vars});
+dynamics.dg_dxu = matlabFunction(dg_dxu,'vars',{vars, u});
+
 %% Simulate
 dynamics.K_ll = [10 2*sqrt(10)];
 dynamics.K_z = [10 5];
@@ -117,7 +123,7 @@ dynamics.K_z = [10 5];
 tspan = [0, 20];
 
 % x0 = [-0.200000000000000,0.320000000000000,2.253969504083596,-2.739547684553864];
-x0 = [-0.1, -0.1, 0, 0];
+x0 = [0.1, 0.1, 0, 0];
 
 [t,x] = ode45(@(t,x) CartpoleODE(t,x,dynamics), tspan, x0, options);
 
@@ -174,6 +180,10 @@ buff = 5;
 set(gca,'FontSize',17)
 set(gca,'linewidth',2)
 
+figure(18)
+plot(t_fine, x_fine)
+
+figure(4)
 pause
 tic
 cont = true;
@@ -193,7 +203,8 @@ while cont
     end
 end
 
-
+figure()
+plot(t_fine, x_fine)
 %% Visualizing Zero Dynamics
 
 figure(5)
@@ -329,8 +340,16 @@ figure(7)
 clf
 fimplicit3(@(x,y,z) dynamics.LgLfe([0;x;y;z]))
 xlabel('th')
+ylabel('dx')
+zlabel('dth')
 
 dynamics.LghatLfhate = matlabFunction(LghatLfhate ,'vars',{z_vars});
+figure(8)
+clf
+fimplicit3(@(x,y,z) dynamics.LghatLfhate([0;x;y;z]))
+xlabel('n2')
+ylabel('z1')
+zlabel('z2')
 
 %% Examine loss of relative degree
 % dynamics.K_z = [3 0.8];
@@ -360,7 +379,136 @@ dynamics.LghatLfhate = matlabFunction(LghatLfhate ,'vars',{z_vars});
 %
 % z_fail = [zeros(2) eye(2)] * dynamics.Phi(x0);
 
+%% Quadratic shapes
+% Define the positive definite matrix P
+figure()
+A = []
+P = 
+P = [2, 1; 1, 3];
 
+% Define the range of x values
+x1 = linspace(-0.5, 0.5, 100);
+x2 = linspace(-1, 1, 100);
+
+% Create a grid of x1 and x2 values
+[X1, X2] = meshgrid(x1, x2);
+
+% Initialize the Z values based on the quadratic form x' * P * x
+Z = zeros(size(X1));
+
+% Calculate the quadratic form for each point in the grid
+for i = 1:numel(X1)
+    x = [X1(i); X2(i)];
+    Z(i) = x' * P * x;
+end
+
+% Plot the level curves
+contour(X1, X2, Z, 20); % You can adjust the number of contour levels (e.g., 20)
+
+% Add labels and title
+xlabel('x1');
+ylabel('x2');
+title('Level Curves of x'' * P * x');
+
+% Add a colorbar for reference
+colorbar;
+
+%% MPC Checking
+T = 0.1;
+x0 = zeros(4, 1);
+u0 = 0;
+f0 = dynamics.f(x0);
+g0 = dynamics.g(x0);
+df_dx0 = dynamics.df_dx(x0);
+dg_dxu0 = dynamics.dg_dxu([x0; u0]);
+Ac = df_dx0 + dg_dxu0;
+Bc = g0;
+Cc = f0 + g0 * u0 - Ac * x0 - Bc * u0;
+Abar = [Ac Bc Cc; zeros(2, 6)];
+eAT = expm(Abar * T);
+Ad = eAT(1:4, 1:4);
+Bd = eAT(1:4, 5);
+Cd = eAT(1:4, end);
+
+%% QP Checking
+H = [2. 0. 0. 0. 0. 0. 0. 0. 0.;
+ 0. 2. 0. 0. 0. 0. 0. 0. 0.;
+ 0. 0. 1. 0. 0. 0. 0. 0. 0.;
+ 0. 0. 0. 1. 0. 0. 0. 0. 0.;
+ 0. 0. 0. 0. 2. 0. 0. 0. 0.;
+ 0. 0. 0. 0. 0. 2. 0. 0. 0.;
+ 0. 0. 0. 0. 0. 0. 1. 0. 0.;
+ 0. 0. 0. 0. 0. 0. 0. 1. 0.;
+ 0. 0. 0. 0. 0. 0. 0. 0. 1.];
+f = [-0. -0. -0. -0. -0. -0. -0. -0.  0.];
+A = [ 0.  0.  0.  0.  0.  0.  0.  0.  1.;
+ -0. -0. -0. -0. -0. -0. -0. -0. -1.];
+b = [ 50. 50.];
+Aeq = [-1.00000000e+00  0.00000000e+00  0.00000000e+00  0.00000000e+00 ...
+   0.00000000e+00  0.00000000e+00  0.00000000e+00  0.00000000e+00 ...
+0.00000000e+00;
+  0.00000000e+00 -1.00000000e+00  0.00000000e+00  0.00000000e+00 ...
+   0.00000000e+00  0.00000000e+00  0.00000000e+00  0.00000000e+00 ...
+   0.00000000e+00;
+  0.00000000e+00  0.00000000e+00 -1.00000000e+00  0.00000000e+00 ...
+   0.00000000e+00  0.00000000e+00  0.00000000e+00  0.00000000e+00 ...
+   0.00000000e+00;
+  0.00000000e+00  0.00000000e+00  0.00000000e+00 -1.00000000e+00 ...
+   0.00000000e+00  0.00000000e+00  0.00000000e+00  0.00000000e+00 ...
+   0.00000000e+00;
+  1.00000000e+00 -4.98572308e-02  1.00000000e-01 -1.65111448e-03 ...
+  -1.00000000e+00  0.00000000e+00  0.00000000e+00  0.00000000e+00 ...
+   5.04114326e-03;
+  0.00000000e+00  1.09971446e+00  0.00000000e+00  1.03302229e-01 ...
+   0.00000000e+00 -1.00000000e+00  0.00000000e+00  0.00000000e+00 ...
+  -5.08228652e-03;
+  0.00000000e+00 -1.01339487e+00  1.00000000e+00 -4.98572308e-02 ...
+   0.00000000e+00  0.00000000e+00 -1.00000000e+00  0.00000000e+00 ...
+   1.01651114e-01;
+  0.00000000e+00  2.02678973e+00  0.00000000e+00  1.09971446e+00 ...
+   0.00000000e+00  0.00000000e+00  0.00000000e+00 -1.00000000e+00 ...
+  -1.03302229e-01];
+beq = [-0.1 -0.1 -0.  -0.  -0.  -0.  -0.  -0. ];
+
+sol = quadprog(H, f, A, b, Aeq, beq);
+
+jaxOptSol = [ 9.99903934e-02  1.00131409e-01 -4.54981728e-05  4.87931482e-05 ...
+  9.51522038e-02  1.09966991e-01 -9.84169912e-02  1.99844082e-01 ...
+  3.07927186e-02];
+
+jaxCVXPYSol = [ 1.00000000e-01  1.00000000e-01  4.49643191e-23 -1.38218301e-22 ...
+  9.51692885e-02  1.09815169e-01 -9.82137866e-02  1.99502503e-01 ...
+  3.07492943e-02];
+
+osqpSol = [0.09998161646625116,0.0999865682484283,-2.0497113781387504e-06,5.443054055757252e-06,0.0951568010847993,0.10980617035751983,-0.09820623392361236,0.19949286881867795,0.030749307549233978];
+
+cvxpySol = [ 1.00000000e-01  1.00000000e-01  4.49643191e-23 -1.38218301e-22,  9.51692885e-02  1.09815169e-01 -9.82137866e-02  1.99502503e-01,  3.07492943e-02];
+
+disp(sol')
+disp(jaxOptSol)
+disp(jaxCVXPYSol)
+disp(osqpSol)
+disp(cvxpySol)
+
+%% vis
+sol = [ 1.00006191e-01,  1.12693039e-01,  1.43346055e-01...
+         1.80902629e-01,  2.19980711e-01,  2.58136196e-01...
+         2.94342948e-01,  3.28106937e-01,  3.58868279e-01...
+         3.85458895e-01,  4.05409806e-01;
+        1.00086626e-01,  9.23135520e-02,  7.55391037e-02...
+         5.92631411e-02,  4.73066095e-02,  4.09524253e-02...
+         4.06085763e-02,  4.67389583e-02,  6.05157790e-02...
+         8.44793865e-02,  1.23489985e-01;
+        9.58767306e-06,  2.54888891e-01,  3.60797302e-01...
+         3.92879202e-01,  3.90527306e-01,  3.73520878e-01...
+         3.50583324e-01,  3.23623124e-01,  2.89299861e-01...
+         2.38566081e-01,  1.54073322e-01;
+        2.25936145e-05, -1.59191382e-01, -1.82578521e-01...
+        -1.48814214e-01, -9.46296799e-02, -3.48180983e-02...
+         2.76176927e-02,  9.68586105e-02,  1.83088923e-01...
+         3.03959199e-01,  4.88954527e-01];
+u = [3.50511431 1.88403148 0.97906862 0.49463976 0.25785831 0.16550979 ...
+  0.1531358  0.17579138 0.19399969 0.16008562];
 %% Controller
 
 function dx = CartpoleODE(t,x,d)

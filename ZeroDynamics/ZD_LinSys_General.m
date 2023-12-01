@@ -57,6 +57,7 @@ else
     disp("Zero Dynamics Unstable")
 end
 disp(eig_Az_cl)
+Pz = lyap(Az_cl', eye(2));
 
 %% Design a feedback controller
 % e = Cx

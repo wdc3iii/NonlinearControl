@@ -268,7 +268,7 @@ grid on
 
 
 %% Compton System
-k = 1; b = 0.2; m = 1;
+k = 1; b = -0.2; m = 1;
 % Nominal Dynamics with x = [x1 x2 x1dot x2dot]
 Anom = [0 0 1 0;
      0 0 0 1;
@@ -292,10 +292,10 @@ Az = Ap(3:4, 3:4);
 
 % Design yd to stabilize the z dynamics
 Q = eye(2);
-R = 1;
+R = 0.0001;
 [Kz, S, p] = lqr(Az, Ay, Q, R);
 G = 10;
-Kz = [G 2*sqrt(G)];
+% Kz = [G 2*sqrt(G)];
 
 % Check if this stabilizes the whole system state
 Az_feedback = ((1 - Adoty / (1 + Kz * Adoty) * Kz) * (Az - Ay * Kz));

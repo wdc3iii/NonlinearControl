@@ -1,0 +1,128 @@
+%% Attempt to debug the learning algorithm, for a linear system where I can compute everything by hand
+clear; clc; close all;
+
+% Setup
+A = [0 1 0 0; 0 0 0 0; 0 0 0 1; 1 -2 -1 2];
+B = [0 1 0 0];
+Az = A(3:4, 3:4);
+An1 = A(3:4, 1);
+An2 = A(3:4, 2);
+
+lam = 0.1;
+P = [1.2514, 0.2771; 0.2771, 0.3166];
+Klin = [0.8625 -0.4619];
+
+syms z1 z2 th1 th2 real
+z = [z1; z2];
+th = [th1 th2];
+
+%% Compute stuff
+n2d = simplify(1 / (1 + 2 * th2) * th * (Az + An1 * th) * z);
+w_z = simplify(Az * z + An1 * (th * z) + An2 * n2d);
+V = simplify(z' * P * z);
+Vdot = simplify(jacobian(V, z) * w_z);
+
+Lz = max(0, Vdot + lam * V);
+gradL_th = jacobian(Lz, th);
+v_grad = jacobian(Vdot + lam * V, th);
+
+func_grad = matlabFunction(gradL_th, 'vars', {[z1, z2, th1, th2]});
+func_loss = matlabFunction(Lz, 'vars', {[z1, z2, th1, th2]});
+func_vgrad = matlabFunction(v_grad, 'vars', {[z1, z2, th1, th2]});
+
+%% Fix a current policy, th = bar_th. Examine gradient of loss as points z.
+[z1_, z2_] = meshgrid(-3:0.1:3);
+th1_ = Klin(1);
+th2_ = Klin(2);
+figure(1)
+plot(Klin(1), Klin(2), 'ro')
+th1s = th1_;
+th2s = th2_;
+lr = 0.001; 
+for ii = 1:1000
+    grad_1 = arrayfun(@(y1, y2) func_vgrad([y1, y2, th1_, th2_]) * [1; 0], z1_, z2_);
+    grad_2 = arrayfun(@(y1, y2) func_vgrad([y1, y2, th1_, th2_]) * [0; 1], z1_, z2_);
+
+    loss = arrayfun(@(y1, y2) func_loss([y1, y2, th1_, th2_]), z1_, z2_);
+    grad_1(loss == 0) = 0;
+    grad_2(loss == 0) = 0;
+
+    figure(2)
+    surf(z1_, z2_, loss, 'EdgeColor','none')
+    colorbar
+    title('Loss')
+    xlabel('z1')
+    ylabel('z2')
+
+    figure(3)
+    quiver(z1_, z2_, grad_1, grad_2, 'k')
+    title('Gradient')
+    axis square
+    xlabel('z1')
+    ylabel('z2')
+
+    th1_ = th1_ - lr * mean(grad_1, 'all');
+    th2_ = th2_ - lr * mean(grad_2, 'all');
+    % [~, inds] = max(loss, [], 'all');
+    % th1_ = th1_ - lr * grad_1(inds);
+    % th2_ = th2_ - lr * grad_2(inds);
+    th1s = [th1s th1_];
+    th2s = [th2s th2_];
+
+    figure(1)
+    clf
+    hold on
+    plot(Klin(1), Klin(2), 'ro')
+    plot(th1s(1), th2s(1), 'go')
+    plot(th1s, th2s, 'b.-')
+    axis square
+    legend('Linear Policy', 'Starting Point', 'Grad Descent')
+    hold off
+
+    if max(loss, [], 'all') == 0
+        break
+    end
+    pause(0.01)
+end
+
+%% Visualize loss at specific K
+th1_ = 1;
+th2_ = -100;
+[z1_, z2_] = meshgrid(-3:0.005:3);
+loss = arrayfun(@(y1, y2) func_loss([y1, y2, th1_, th2_]), z1_, z2_);
+figure(7)
+surf(z1_, z2_, loss, 'EdgeColor','none')
+colorbar
+title('Loss')
+xlabel('z1')
+ylabel('z2')
+
+%% Visualize loss landscape (L2ish error)
+[th1_, th2_] = meshgrid(-2:0.1:2);
+% [th1_, th2_] = meshgrid(0.5:0.02:1, -0.5:0.02:0);
+loss = arrayfun(@(t1, t2) mean(arrayfun(@(y1, y2) func_loss([y1, y2, t1, t2]), z1_, z2_), 'all'), th1_, th2_);
+figure(5)
+clf
+hold on
+surf(th1_, th2_, loss, 'EdgeColor', 'none')
+% set(gca,'zscale','log')
+plot3(Klin(1), Klin(2), 0.01, 'ro')
+xlabel('theta_1')
+ylabel('theta_2')
+zlabel('loss')
+hold off
+
+%% Visualize loss landscape (Linfish error)
+[th1_, th2_] = meshgrid(-2:0.1:2);
+% [th1_, th2_] = meshgrid(0.5:0.02:1, -0.5:0.02:0);
+loss = arrayfun(@(t1, t2) max(arrayfun(@(y1, y2) func_loss([y1, y2, t1, t2]), z1_, z2_),[], 'all'), th1_, th2_);
+figure(6)
+clf
+hold on
+surf(th1_, th2_, loss, 'EdgeColor', 'none')
+% set(gca,'zscale','log')
+plot3(Klin(1), Klin(2), 0.01, 'ro')
+xlabel('theta_1')
+ylabel('theta_2')
+zlabel('loss')
+hold off
